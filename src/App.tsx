@@ -11,13 +11,17 @@ const tabs: TabProps[] = [
     id: "contact",
     content: <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>contact content</div>,
     label: "Contact me with your friends",
+    disabled: true,
+  },
+  {
+    id: "pricing",
+    content: <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>pricing content</div>,
+    label: "Pricing",
   },
 ];
 
 function App() {
   const [id, setId] = useState<string | number>("about");
-
-  console.log({ id });
 
   return (
     <div style={{ padding: 50 }}>

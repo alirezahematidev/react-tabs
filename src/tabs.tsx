@@ -13,6 +13,9 @@ export interface TabProps {
 }
 
 interface BaseProps {
+  /**
+   * @todo layout `vertical` is not implemented yet
+   */
   layout?: "horizontal" | "vertical";
   direction?: "ltr" | "rtl";
   activeTabId: TabIdentifier;
@@ -34,7 +37,7 @@ function Tab(props: TabProps): React.ReactNode {
 
   console.assert(typeof props === "object");
 
-  if (!isTabsChildren) throw new Error("Tab should render in Tabs component as first child.");
+  if (!isTabsChildren) throw new Error("Tab should render in Tabs component as top child.");
 
   return null;
 }
@@ -43,10 +46,16 @@ function isChildren(props: TabsProps): props is Extract<TabsProps, PropsWithChil
   return "children" in props && Array.isArray(props.children);
 }
 
-function def(tabId: TabIdentifier | undefined, tabs: TabProps[]) {
-  const [tab] = tabs || [];
+function def(tabId: TabIdentifier | undefined, tabs: TabProps[] = []) {
+  const activeTab = tabs.find((tab) => tab.id === tabId) ?? tabs[0];
 
-  return tabId || tab.id;
+  if (activeTab.disabled) {
+    const tab = tabs.find((tab) => !tab.disabled);
+
+    return tab ? tab.id : null;
+  }
+
+  return activeTab.id;
 }
 
 function preparedTabs(props: TabsProps) {
@@ -88,17 +97,13 @@ function classes(...inputs: TabClass[]) {
 }
 
 function useTabState(props: TabsProps, tabs: TabProps[]) {
-  const [_activeTabId, _onChange] = useState<TabIdentifier>(def(props.activeTabId, tabs));
+  const [activeTabId, onChange] = useState<TabIdentifier | null>(def(props.activeTabId, tabs));
 
-  return useMemo(() => {
-    const { activeTabId = _activeTabId, onChange = _onChange } = props;
-
-    return { activeTabId, onChange };
-  }, [props, _activeTabId]);
+  return { activeTabId, onChange };
 }
 
 interface ActiveIndicatorProps {
-  activeTabId: TabIdentifier;
+  activeTabId: TabIdentifier | null;
   tabs: TabProps[];
   refs: React.MutableRefObject<{
     [k: string]: React.RefObject<HTMLSpanElement>;
@@ -122,12 +127,16 @@ const defaultStyles: Styles = {
 function ActiveIndicator({ activeTabId, tabs, refs }: ActiveIndicatorProps) {
   const [style, setStyle] = useState<Styles>(defaultStyles);
 
+  const initial = useRef<boolean>(true);
+
   useLayoutEffect(() => {
-    const activeIndex = tabs.findIndex((tab) => tab.id === activeTabId);
+    const enabledTabs = tabs.filter((tab) => !tab.disabled);
+
+    const activeIndex = enabledTabs.findIndex((tab) => tab.id === activeTabId);
 
     if (activeIndex === -1) return;
 
-    const current = refs.current[tabs[activeIndex].id].current;
+    const current = refs.current[enabledTabs[activeIndex].id].current;
 
     if (current) {
       const width = current.clientWidth;
@@ -135,15 +144,21 @@ function ActiveIndicator({ activeTabId, tabs, refs }: ActiveIndicatorProps) {
       const bottom = (height / 2) * -1;
       const transform = `translateX(${current.offsetLeft}px)`;
 
+      initial.current = false;
+
       setStyle({ width, height, bottom, transform });
     }
   }, [refs, tabs, activeTabId]);
+
+  if (initial.current) return null;
 
   return <div className="tab-item-indicator" style={style} />;
 }
 
 function Tabs(props: TabsProps) {
   const tabs = useMemo(() => preparedTabs(props), [props]);
+
+  const parent = useRef<HTMLDivElement>(null);
 
   const refs = useRef(Object.fromEntries(tabs.map(({ id }) => [id, createRef<HTMLSpanElement>()])));
 
@@ -158,18 +173,47 @@ function Tabs(props: TabsProps) {
   const content = useMemo(() => {
     const tab = tabs.find((item) => item.id === activeTabId);
 
-    if (!tab) return null;
+    if (!tab || tab.disabled) return null;
 
     return tab.content;
   }, [tabs, activeTabId]);
 
+  useLayoutEffect(() => {
+    if (!parent.current || !refs.current) return;
+
+    const list: string[] = [];
+
+    const element = parent.current;
+
+    const _refs = Object.entries(refs.current);
+
+    const handle = () => {
+      const width = element.clientWidth;
+
+      const actualMinWidth = _refs.reduce((prev, [_id, ref]) => {
+        return prev + (ref.current?.clientWidth || 0);
+      }, 0);
+
+      if (width < actualMinWidth + (_refs.length - 1) * 8) {
+        const popped = _refs.pop();
+
+        if (popped) list.push(popped[0]);
+      }
+    };
+
+    handle();
+    window.addEventListener("resize", handle);
+
+    return () => {
+      window.removeEventListener("resize", handle);
+    };
+  }, []);
+
   return (
     <TabsChildrenContext.Provider value>
-      <div className="tab-container">
+      <div className="tab-container" ref={parent}>
         <div className="tab-items">
-          {tabs.map((tab) => {
-            const { id, label, disabled } = tab;
-
+          {tabs.map(({ id, label, disabled }) => {
             return (
               <span
                 key={id}

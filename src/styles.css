@@ -7,6 +7,7 @@ body {
 .tab-container {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .tab-items {
@@ -25,6 +26,9 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
+  font-size: 14px;
+  transition: color 250ms ease-in-out;
+  white-space: nowrap;
 }
 
 .active-tab-item {
@@ -45,7 +49,7 @@ body {
   transform-origin: center center;
   transform-style: preserve-3d;
   pointer-events: none;
-  transition: all 250ms ease-in-out;
+  transition: width 250ms ease-in-out, transform 250ms ease-in-out;
   position: absolute;
   background: #4096ff;
   border-radius: 99px;
